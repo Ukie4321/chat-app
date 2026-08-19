@@ -18,16 +18,16 @@
     button { padding: 10px 18px; background: #075e54; color: white; border: none; border-radius: 20px; cursor: pointer; font-weight: bold; }
     
     /* Layar Login */
-    #login-screen { 
-      position: fixed; 
-      top: 0; left: 0; right: 0; bottom: 0; 
-      background: rgba(255, 255, 255, 0.98); 
-      display: flex; 
-      flex-direction: column; 
-      justify-content: center; 
-      align-items: center; 
-      gap: 15px; 
-      z-index: 999; 
+    #login-screen {
+      position: fixed;
+      top: 0; left: 0; right: 0; bottom: 0;
+      background: rgba(255, 255, 255, 0.98);
+      display: flex;
+      flex-direction: column;
+      justify-content: center;
+      align-items: center;
+      gap: 15px;
+      z-index: 999;
       padding: 20px;
     }
     #login-screen input {
@@ -55,103 +55,106 @@
 
   <div id="input-box">
     <input type="file" id="file-input" accept="image/*" style="display: none;" onchange="uploadFile()">
-    <button type="button" onclick="document.getElementById('file-input').click()">📷</button>
+    <button type="button" onclick="document.getElementById('file-input').click()">馃搸</button>
     <input type="text" id="msg-input" placeholder="Ketik pesan...">
     <button type="button" onclick="sendMessage()">Kirim</button>
   </div>
 
   <script>
-    // URL dasar Supabase (tanpa /rest/v1/)
-    const SUPABASE_URL = "https://kffdshllhcxkddymhple.supabase.co";
-    const SUPABASE_KEY = "sb_publishable_-1a9e-ybPaTV9J8Sjb3klg_DN_QAn0l"; 
-    
+    const SUPABASE_URL = "https://kffdshllhcxddymphle.supabase.co";
+    const SUPABASE_KEY = "sb_publishable_-1a9e-ybPaTV9J8Sjb3klg_DN_QaN0l";
     let supabaseClient = null;
+
     try {
-      supabaseClient = supabase.createClient(SUPABASE_URL, SUPABASE_KEY);
-    } catch(e) {
-      console.error("Gagal inisialisasi Supabase:", e);
+      if (typeof supabase !== 'undefined') {
+        supabaseClient = supabase.createClient(SUPABASE_URL, SUPABASE_KEY);
+      }
+    } catch (e) {
+      console.error("Supabase init error:", e);
     }
 
-    let currentUser = "";
+    let currentUser = localStorage.getItem('chat_username') || '';
 
-    function login() {
-      const inputEl = document.getElementById('username-input');
-      const user = inputEl ? inputEl.value.trim() : "";
-      
-      if (!user) {
-        alert("Silakan isi nama Anda terlebih dahulu!");
-        return;
-      }
-      
-      currentUser = user;
+    if (currentUser) {
       document.getElementById('login-screen').style.display = 'none';
       loadMessages();
-      setInterval(loadMessages, 3000); // Perbarui pesan otomatis tiap 3 detik
+    }
+
+    function login() {
+      const name = document.getElementById('username-input').value.trim();
+      if (!name) return alert('Masukkan nama Anda!');
+      currentUser = name;
+      localStorage.setItem('chat_username', name);
+      document.getElementById('login-screen').style.display = 'none';
+      loadMessages();
     }
 
     async function loadMessages() {
       try {
         const res = await fetch('/api/messages');
-        const data = await res.json();
-        const chatBox = document.getElementById('chat-box');
-        chatBox.innerHTML = '';
-        
-        if (Array.isArray(data)) {
-          data.forEach(msg => {
-            const div = document.createElement('div');
-            div.className = `msg ${msg.sender_id === currentUser ? 'sent' : 'received'}`;
-            div.innerHTML = `<small style="color:#075e54;font-weight:bold">${msg.sender_id}</small><br>${msg.content}`;
-            
-            if (msg.media_url) {
-              div.innerHTML += `<br><img src="${msg.media_url}" class="media">`;
-            }
-            chatBox.appendChild(div);
-          });
-          chatBox.scrollTop = chatBox.scrollHeight;
-        }
-      } catch (e) {
-        console.error("Gagal memuat pesan:", e);
+        if (!res.ok) return;
+        const messages = await res.json();
+        const box = document.getElementById('chat-box');
+        box.innerHTML = '';
+        messages.forEach(m => {
+          const div = document.createElement('div');
+          div.className = `msg ${m.sender === currentUser ? 'sent' : 'received'}`;
+          div.innerText = `${m.sender}: ${m.text}`;
+          box.appendChild(div);
+        });
+        box.scrollTop = box.scrollHeight;
+      } catch (err) {
+        console.error(err);
       }
     }
 
-    async function sendMessage(mediaUrl = '') {
+    async function sendMessage() {
       const input = document.getElementById('msg-input');
-      const content = input.value.trim();
-      if (!content && !mediaUrl) return;
-
-      await fetch('/api/messages', {
-        method: 'POST',
-        headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({
-          sender_id: currentUser,
-          content: content || '📷 Foto',
-          media_url: mediaUrl
-        })
-      });
-
+      const text = input.value.trim();
+      if (!text) return;
       input.value = '';
-      loadMessages();
+
+      try {
+        await fetch('/api/messages', {
+          method: 'POST',
+          headers: { 'Content-Type': 'application/json' },
+          body: JSON.stringify({ sender: currentUser, text })
+        });
+        loadMessages();
+      } catch (err) {
+        console.error(err);
+      }
     }
 
     async function uploadFile() {
       const fileInput = document.getElementById('file-input');
       const file = fileInput.files[0];
-      if (!file) return;
-
-      if (!supabaseClient) {
-        return alert("Supabase belum terkonfigurasi dengan benar.");
-      }
+      if (!file || !supabaseClient) return;
 
       const fileName = `${Date.now()}_${file.name}`;
       const { data, error } = await supabaseClient.storage
-        .from('chat-media')
+        .from('chat-uploads')
         .upload(fileName, file);
 
-      if (error) return alert('Gagal mengunggah foto: ' + error.message);
+      if (error) {
+        alert('Gagal upload gambar!');
+        return;
+      }
 
-      const mediaUrl = `${SUPABASE_URL}/storage/v1/object/public/chat-media/${fileName}`;
-      sendMessage(mediaUrl);
+      const { data: publicUrlData } = supabaseClient.storage
+        .from('chat-uploads')
+        .getPublicUrl(fileName);
+
+      await fetch('/api/messages', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ sender: currentUser, text: `<img src="${publicUrlData.publicUrl}" class="media">` })
+      });
+      loadMessages();
     }
+
+    // Auto Refresh Pesan Tiap 3 Detik
+    setInterval(loadMessages, 3000);
   </script>
 </body>
 </html>
